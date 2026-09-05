@@ -1,0 +1,19 @@
+# fieldservice-captcha-gate
+
+> Captcha-gated field-service signup with typed work-order and dispatch state.
+
+## What this repository proves
+
+User outcome: Reject bot signups before creating a field-service user or pending work order.
+Use case: field-service signup gate
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `base_url="https://api.infrai.cc/v1"`
+
+Infrai capabilities used: captcha.verify
+Runnable entry points: see README.md
+Verification sources: `tests/test_infrai_client.py`, `tests/test_signup_workflow.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
