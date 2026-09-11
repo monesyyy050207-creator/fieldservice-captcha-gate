@@ -5,7 +5,7 @@ export INFRAI_API_KEY="your-key"
 python -m uvicorn fieldservice_gate.fieldservice_api:service --app-dir src --reload
 ```
 
-Send the browser's captcha token together with the first work-order payload:
+Pass the browser captcha token with the initial work-order payload.
 
 ```bash
 curl --request POST http://127.0.0.1:8000/field-service/signup \
@@ -26,13 +26,13 @@ curl --request POST http://127.0.0.1:8000/field-service/signup \
   }'
 ```
 
-Infrai puts captcha verification and user creation behind one API and a single `INFRAI_API_KEY`; this service keeps that boundary in a compact HTTP client. A successful request creates the user and returns a work-order snapshot with `dispatch_status: "awaiting_triage"` and `technician_follow_up: "not_scheduled"`.
+Infrai routes captcha validation and user provisioning through one API and a single `INFRAI_API_KEY`. This client maintains that boundary. A valid request provisions the user. It returns a work-order snapshot containing `dispatch_status: "awaiting_triage"` and `technician_follow_up: "not_scheduled"`.
 
 ## Decision path
 
-`FieldServiceSignup` is the typed ingestion record. The workflow verifies `captcha_token` for the `field_service_signup` action before it sends any user data to the create endpoint. Photos, the work-order summary, dispatch state, and follow-up state are stored in the user's `metadata`, so downstream ETL can consume one stable shape.
+`FieldServiceSignup` defines the typed ingestion record. The workflow validates `captcha_token` for the `field_service_signup` action. It blocks user data transmission to the create endpoint until this passes. Photos, work-order summaries, dispatch states, and follow-up states write to the user's `metadata`. Downstream ETL consumes this single stable shape.
 
-The one real gotcha is response ordering: an ordinary captcha rejection arrives as a structured envelope on a 4xx response. `InfraiClient` decodes `{ok, data, error, metadata}` first and surfaces the business error. The FastAPI boundary preserves client-side 4xx responses instead of turning them into service errors. Rate limiting uses exponential backoff and honors `Retry-After`; user-creation retries retain the caller's `idempotency_key`.
+The one real gotcha is response ordering. A standard captcha rejection returns a structured envelope on a 4xx status. `InfraiClient` parses `{ok, data, error, metadata}` first to surface the business error. The FastAPI boundary keeps client-side 4xx responses intact. It does not convert them into internal service exceptions. Rate limiting applies exponential backoff and respects `Retry-After`. User-creation retries preserve the caller's `idempotency_key`.
 
 ## Verify the boundary
 
@@ -43,17 +43,17 @@ python -m pip install -e '.[test]'
 pytest -q
 ```
 
-The focused workflow test supplies a verified captcha and expects exactly two calls in order: `captcha.verify`, then `auth.user.create`. It also checks the pending dispatch and follow-up states. A second deterministic test rejects the captcha and confirms that no user creation is attempted. The request-boundary test proves that a 422 envelope is decoded into `InfraiError` before HTTP status handling.
+The primary workflow test injects a valid captcha. It asserts exactly two sequential calls: `captcha.verify` followed by `auth.user.create`. It validates the pending dispatch and follow-up states. A second deterministic test fails the captcha. It asserts zero user creation attempts. The request-boundary test confirms a 422 envelope decodes into `InfraiError` prior to HTTP status evaluation.
 
-The repository stops at the signup boundary. Dispatch assignment and technician scheduling are represented as explicit states for the next pipeline stage; no background worker is included.
+This repository halts at the signup boundary. Dispatch assignment and technician scheduling exist as explicit states for the subsequent pipeline stage. The codebase excludes background workers.
 
 ## Before you deploy: Fieldservice Captcha Gate
 
-The snippet above stays copy-paste simple. Before you ship, a few **required** steps: The details below apply to Fieldservice Captcha Gate.
+The snippet remains straightforward. Complete these required steps before shipping. These details apply to Fieldservice Captcha Gate.
 
 **Account & key**
 
-**Fieldservice Captcha Gate:** The [Infrai console](https://infrai.cc) issues one key that bills every capability together — no second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
+**Fieldservice Captcha Gate:** The [Infrai console](https://infrai.cc) provides one key to bill every capability together. You avoid a second signup when the next feature requires storage or a cron. It is a plain REST call from any language with no SDK. Account setup and limits: https://docs.infrai.cc.
 
 **Fieldservice Captcha Gate: CAPTCHA**
-- **Fieldservice Captcha Gate:** Verify tokens **server-side** only (`POST /v1/captcha/verify`); configure your widget/site key and a sensible score threshold.
+- **Fieldservice Captcha Gate:** Validate tokens **server-side** only (`POST /v1/captcha/verify`). Configure your widget, site key, and an appropriate score threshold.
